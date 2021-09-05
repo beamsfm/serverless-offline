@@ -10,7 +10,7 @@ import { dirname, join, sep } from 'path'
 import crypto from 'crypto'
 import DockerImage from './DockerImage.js'
 import debugLog from '../../../debugLog.js'
-import { logLayers, logWarning } from '../../../serverlessLog.js'
+import serverlessLog, { logLayers, logWarning } from '../../../serverlessLog.js'
 
 const { stringify } = JSON
 const { entries } = Object
@@ -77,6 +77,12 @@ export default class DockerContainer {
       'DOCKER_LAMBDA_STAY_OPEN=1', // API mode
       '-e',
       'DOCKER_LAMBDA_WATCH=1', // Watch mode
+      '-e',
+      `AWS_ACCESS_KEY_ID=${process.env.AWS_ACCESS_KEY_ID}`,
+      '-e',
+      `AWS_SECRET_ACCESS_KEY=${process.env.AWS_SECRET_ACCESS_KEY}`,
+      '-e',
+      `AWS_SESSION_TOKEN=${process.env.AWS_SESSION_TOKEN}`,
     ]
 
     if (this.#layers.length > 0) {
