@@ -1,28 +1,45 @@
-import { Buffer } from 'buffer'
+import { Buffer } from 'node:buffer'
+import { env } from 'node:process'
 import { decode } from 'jsonwebtoken'
 import {
   formatToClfTime,
   nullIfEmpty,
   parseHeaders,
+  lowerCaseKeys,
 } from '../../../utils/index.js'
 
-const { byteLength } = Buffer
+const { isArray } = Array
 const { parse } = JSON
-const { assign } = Object
+const { assign, entries, fromEntries } = Object
 
 // https://www.serverless.com/framework/docs/providers/aws/events/http-api/
 // https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html
 export default class LambdaProxyIntegrationEventV2 {
+  #additionalRequestContext = null
   #routeKey = null
   #request = null
   #stage = null
   #stageVariables = null
 
-  constructor(request, stage, routeKey, stageVariables) {
+  constructor(
+    request,
+    stage,
+    routeKey,
+    stageVariables,
+    additionalRequestContext,
+    v3Utils,
+  ) {
     this.#routeKey = routeKey
     this.#request = request
     this.#stage = stage
     this.#stageVariables = stageVariables
+    this.#additionalRequestContext = additionalRequestContext || {}
+    if (v3Utils) {
+      this.log = v3Utils.log
+      this.progress = v3Utils.progress
+      this.writeText = v3Utils.writeText
+      this.v3Utils = v3Utils
+    }
   }
 
   create() {
@@ -34,13 +51,19 @@ export default class LambdaProxyIntegrationEventV2 {
 
     let authAuthorizer
 
-    if (process.env.AUTHORIZER) {
+    if (env.AUTHORIZER) {
       try {
-        authAuthorizer = parse(process.env.AUTHORIZER)
-      } catch (error) {
-        console.error(
-          'Serverless-offline: Could not parse process.env.AUTHORIZER, make sure it is correct JSON.',
-        )
+        authAuthorizer = parse(env.AUTHORIZER)
+      } catch {
+        if (this.log) {
+          this.log.error(
+            'Could not parse process.env.AUTHORIZER, make sure it is correct JSON',
+          )
+        } else {
+          console.error(
+            'Serverless-offline: Could not parse process.env.AUTHORIZER, make sure it is correct JSON.',
+          )
+        }
       }
     }
 
@@ -49,7 +72,23 @@ export default class LambdaProxyIntegrationEventV2 {
     const { rawHeaders } = this.#request.raw.req
 
     // NOTE FIXME request.raw.req.rawHeaders can only be null for testing (hapi shot inject())
-    const headers = parseHeaders(rawHeaders || []) || {}
+    const headers = lowerCaseKeys(parseHeaders(rawHeaders || [])) || {}
+
+    if (headers['sls-offline-authorizer-override']) {
+      try {
+        authAuthorizer = parse(headers['sls-offline-authorizer-override'])
+      } catch {
+        if (this.log) {
+          this.log.error(
+            'Could not parse header sls-offline-authorizer-override, make sure it is correct JSON',
+          )
+        } else {
+          console.error(
+            'Serverless-offline: Could not parse header sls-offline-authorizer-override make sure it is correct JSON.',
+          )
+        }
+      }
+    }
 
     if (body) {
       if (typeof body !== 'string') {
@@ -58,23 +97,17 @@ export default class LambdaProxyIntegrationEventV2 {
       }
 
       if (
-        !headers['Content-Length'] &&
         !headers['content-length'] &&
-        !headers['Content-length'] &&
         (typeof body === 'string' ||
           body instanceof Buffer ||
           body instanceof ArrayBuffer)
       ) {
-        headers['Content-Length'] = String(byteLength(body))
+        headers['content-length'] = String(Buffer.byteLength(body))
       }
 
       // Set a default Content-Type if not provided.
-      if (
-        !headers['Content-Type'] &&
-        !headers['content-type'] &&
-        !headers['Content-type']
-      ) {
-        headers['Content-Type'] = 'application/json'
+      if (!headers['content-type']) {
+        headers['content-type'] = 'application/json'
       }
     } else if (typeof body === 'undefined' || body === '') {
       body = null
@@ -103,7 +136,7 @@ export default class LambdaProxyIntegrationEventV2 {
           // claims = { ...claims }
           // delete claims.scope
         }
-      } catch (err) {
+      } catch {
         // Do nothing
       }
     }
@@ -118,20 +151,24 @@ export default class LambdaProxyIntegrationEventV2 {
     const requestTime = formatToClfTime(received)
     const requestTimeEpoch = received
 
-    const cookies = Object.entries(this.#request.state).map(
-      ([key, value]) => `${key}=${value}`,
-    )
+    const cookies = entries(this.#request.state).flatMap(([key, value]) => {
+      if (isArray(value)) {
+        return value.map((v) => `${key}=${v}`)
+      }
+      return `${key}=${value}`
+    })
 
     return {
-      version: '2.0',
-      routeKey: this.#routeKey,
-      rawPath: this.#request.url.pathname,
-      rawQueryString: this.#request.url.searchParams.toString(),
+      body,
       cookies,
       headers,
+      isBase64Encoded: false,
+      pathParameters: nullIfEmpty(pathParams),
       queryStringParameters: this.#request.url.search
-        ? Object.fromEntries(Array.from(this.#request.url.searchParams))
+        ? fromEntries(Array.from(this.#request.url.searchParams))
         : null,
+      rawPath: this.#request.url.pathname,
+      rawQueryString: this.#request.url.searchParams.toString(),
       requestContext: {
         accountId: 'offlineContext_accountId',
         apiId: 'offlineContext_apiId',
@@ -152,16 +189,16 @@ export default class LambdaProxyIntegrationEventV2 {
           sourceIp: remoteAddress,
           userAgent: _headers['user-agent'] || '',
         },
+        operationName: this.#additionalRequestContext.operationName,
         requestId: 'offlineContext_resourceId',
         routeKey: this.#routeKey,
         stage: this.#stage,
         time: requestTime,
         timeEpoch: requestTimeEpoch,
       },
-      body,
-      pathParameters: nullIfEmpty(pathParams),
-      isBase64Encoded: false,
+      routeKey: this.#routeKey,
       stageVariables: this.#stageVariables,
+      version: '2.0',
     }
   }
 }

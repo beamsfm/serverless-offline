@@ -26,6 +26,7 @@ export const supportedNodejs = new Set([
   'nodejs10.x',
   'nodejs12.x',
   'nodejs14.x',
+  'nodejs16.x',
 ])
 
 // PROVIDED
@@ -37,6 +38,7 @@ export const supportedPython = new Set([
   'python3.6',
   'python3.7',
   'python3.8',
+  'python3.9',
 ])
 
 // RUBY

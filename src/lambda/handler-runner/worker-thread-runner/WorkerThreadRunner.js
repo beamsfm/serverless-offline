@@ -1,11 +1,11 @@
-import { resolve } from 'path'
-import { MessageChannel, Worker } from 'worker_threads' // eslint-disable-line import/no-unresolved
+import { resolve } from 'node:path'
+import { MessageChannel, Worker } from 'node:worker_threads' // eslint-disable-line import/no-unresolved
 
 const workerThreadHelperPath = resolve(__dirname, './workerThreadHelper.js')
 
 export default class WorkerThreadRunner {
-  #workerThread = null
   #allowCache = false
+  #workerThread = null
 
   constructor(funOptions /* options */, env, allowCache) {
     // this._options = options
@@ -51,9 +51,9 @@ export default class WorkerThreadRunner {
 
       this.#workerThread.postMessage(
         {
+          allowCache: this.#allowCache,
           context,
           event,
-          allowCache: this.#allowCache,
           // port2 is part of the payload, for the other side to answer messages
           port: port2,
         },

@@ -1,4 +1,7 @@
-import { resolve } from 'path'
+import assert from 'node:assert'
+import { dirname, resolve } from 'node:path'
+import { env } from 'node:process'
+import { fileURLToPath } from 'node:url'
 import fetch from 'node-fetch'
 import {
   compressArtifact,
@@ -7,24 +10,26 @@ import {
   teardown,
 } from '../../_testHelpers/index.js'
 
-jest.setTimeout(60000)
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
-describe('Local artifact tests', () => {
-  // init
-  beforeAll(async () => {
+describe('Local artifact tests', function desc() {
+  this.timeout(60000)
+
+  beforeEach(async () => {
     await compressArtifact(__dirname, './artifacts/hello1.zip', [
-      './handler1.js',
+      './src/handler1.js',
+      './src/package.json',
     ])
     await compressArtifact(__dirname, './artifacts/hello2.zip', [
-      './handler2.js',
+      './src/handler2.js',
+      './src/package.json',
     ])
     return setup({
       servicePath: resolve(__dirname),
     })
   })
 
-  // cleanup
-  afterAll(() => teardown())
+  afterEach(() => teardown())
 
   //
   ;[
@@ -43,12 +48,12 @@ describe('Local artifact tests', () => {
       path: '/dev/hello2',
     },
   ].forEach(({ description, expected, path }) => {
-    test(description, async () => {
-      const url = joinUrl(TEST_BASE_URL, path)
+    it(description, async () => {
+      const url = joinUrl(env.TEST_BASE_URL, path)
       const response = await fetch(url)
       const json = await response.json()
 
-      expect(json).toEqual(expected)
+      assert.deepEqual(json, expected)
     })
   })
 })

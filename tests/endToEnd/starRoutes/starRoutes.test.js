@@ -1,4 +1,7 @@
-import { resolve } from 'path'
+import assert from 'node:assert'
+import { dirname, resolve } from 'node:path'
+import { env } from 'node:process'
+import { fileURLToPath } from 'node:url'
 import fetch from 'node-fetch'
 import {
   joinUrl,
@@ -6,26 +9,26 @@ import {
   teardown,
 } from '../../integration/_testHelpers/index.js'
 
-jest.setTimeout(30000)
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
-describe('star routes', () => {
-  // init
-  beforeAll(() =>
+describe('star routes', function desc() {
+  this.timeout(30000)
+
+  beforeEach(() =>
     setup({
-      servicePath: resolve(__dirname),
+      servicePath: resolve(__dirname, 'src'),
     }),
   )
 
-  // cleanup
-  afterAll(() => teardown())
+  afterEach(() => teardown())
 
   describe('when a star route is used (and has no path property)', () => {
-    test('it should return a payload', async () => {
-      const url = joinUrl(TEST_BASE_URL, '/dev')
+    it('it should return a payload', async () => {
+      const url = joinUrl(env.TEST_BASE_URL, '/dev')
       const response = await fetch(url)
       const json = await response.json()
 
-      expect(json).toEqual({ foo: 'bar' })
+      assert.deepEqual(json, { foo: 'bar' })
     })
   })
 })

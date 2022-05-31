@@ -1,20 +1,25 @@
-import { resolve } from 'path'
+import assert from 'node:assert'
+import { dirname, resolve } from 'node:path'
+import { env } from 'node:process'
+import { fileURLToPath } from 'node:url'
 import fetch from 'node-fetch'
 import { joinUrl, setup, teardown } from '../_testHelpers/index.js'
 
-jest.setTimeout(30000)
+const { stringify } = JSON
 
-describe('handler payload tests', () => {
-  // init
-  beforeAll(() =>
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+describe('handler payload tests', function desc() {
+  this.timeout(30000)
+
+  beforeEach(() =>
     setup({
-      servicePath: resolve(__dirname),
       noPrependStageInUrl: false,
+      servicePath: resolve(__dirname),
     }),
   )
 
-  // cleanup
-  afterAll(() => teardown())
+  afterEach(() => teardown())
 
   //
   ;[
@@ -160,31 +165,31 @@ describe('handler payload tests', () => {
     //   path: '/dev/callback-inside-promise-handler',
     // },
   ].forEach(({ description, expected, path, status }) => {
-    test(description, async () => {
-      const url = joinUrl(TEST_BASE_URL, path)
+    it(description, async () => {
+      const url = joinUrl(env.TEST_BASE_URL, path)
 
       const response = await fetch(url)
-      expect(response.status).toEqual(status)
+      assert.equal(response.status, status)
 
       if (expected) {
         const json = await response.json()
-        expect(json).toEqual(expected)
+        assert.deepEqual(json, expected)
       }
     })
   })
 })
 
-describe('handler payload tests with prepend off', () => {
-  // init
-  beforeAll(() =>
+describe('handler payload tests with prepend off', function desc() {
+  this.timeout(30000)
+
+  beforeEach(() =>
     setup({
-      servicePath: resolve(__dirname),
       args: ['--noPrependStageInUrl'],
+      servicePath: resolve(__dirname),
     }),
   )
 
-  // cleanup
-  afterAll(() => teardown())
+  afterEach(() => teardown())
 
   //
   ;[
@@ -309,63 +314,65 @@ describe('handler payload tests with prepend off', () => {
       status: 200,
     },
   ].forEach(({ description, expected, path, status }) => {
-    test(description, async () => {
-      const url = joinUrl(TEST_BASE_URL, path)
+    it(description, async () => {
+      const url = joinUrl(env.TEST_BASE_URL, path)
 
       const response = await fetch(url)
-      expect(response.status).toEqual(status)
+      assert.equal(response.status, status)
 
       if (expected) {
         const json = await response.json()
-        expect(json).toEqual(expected)
+        assert.deepEqual(json, expected)
       }
     })
   })
 })
 
-describe('handler payload scehma validation tests', () => {
-  // init
-  beforeAll(() =>
+describe.skip('handler payload scehma validation tests', function desc() {
+  this.timeout(30000)
+
+  beforeEach(() =>
     setup({
-      servicePath: resolve(__dirname),
       args: ['--noPrependStageInUrl'],
+      servicePath: resolve(__dirname),
     }),
   )
 
-  // cleanup
-  afterAll(() => teardown())
+  afterEach(() => teardown())
+
+  //
   ;[
     {
-      description: 'test with valid payload',
-      expectedBody: `{"foo":"bar"}`,
-      path: '/test-payload-schema-validator',
       body: {
         foo: 'bar',
       },
+      description: 'test with valid payload',
+      expectedBody: `{"foo":"bar"}`,
+      path: '/test-payload-schema-validator',
       status: 200,
     },
 
     {
+      body: {},
       description: 'test with invalid payload',
       path: '/test-payload-schema-validator',
-      body: {},
       status: 400,
     },
   ].forEach(({ description, expectedBody, path, body, status }) => {
-    test(description, async () => {
-      const url = joinUrl(TEST_BASE_URL, path)
+    it(description, async () => {
+      const url = joinUrl(env.TEST_BASE_URL, path)
 
       const response = await fetch(url, {
-        method: 'post',
-        body: JSON.stringify(body),
+        body: stringify(body),
         headers: { 'Content-Type': 'application/json' },
+        method: 'post',
       })
 
-      expect(response.status).toEqual(status)
+      assert.equal(response.status, status)
 
       if (expectedBody) {
         const json = await response.json()
-        expect(json.body).toEqual(expectedBody)
+        assert.deepEqual(json.body, expectedBody)
       }
     })
   })

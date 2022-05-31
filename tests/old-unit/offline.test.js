@@ -834,7 +834,7 @@ describe('Offline', () => {
   })
 
   describe('disable cookie validation', () => {
-    test('should return bad reqeust by default if invalid cookies are passed by the request', async () => {
+    test.skip('should return bad reqeust by default if invalid cookies are passed by the request', async () => {
       const offline = await new OfflineBuilder()
         .addFunctionConfig('cookie', {
           events: [
@@ -1014,7 +1014,7 @@ describe('Offline', () => {
     })
 
     describe('disable cookie validation', () => {
-      test('should return bad request by default if invalid cookies are passed by the request', async () => {
+      test.skip('should return bad request by default if invalid cookies are passed by the request', async () => {
         const offline = await new OfflineBuilder(serviceBuilder, {
           resourceRoutes: true,
         })
@@ -1045,8 +1045,8 @@ describe('Offline', () => {
 
       test('should return 200 if the "disableCookieValidation"-flag is set', async () => {
         const offline = await new OfflineBuilder(serviceBuilder, {
-          resourceRoutes: true,
           disableCookieValidation: true,
+          resourceRoutes: true,
         })
           .addFunctionConfig('cookie', {
             events: [

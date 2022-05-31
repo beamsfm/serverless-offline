@@ -1,12 +1,12 @@
-import { Buffer } from 'buffer'
+import { Buffer } from 'node:buffer'
 import { Headers } from 'node-fetch'
 import InvocationsController from './InvocationsController.js'
 
 const { parse } = JSON
 
 // https://docs.aws.amazon.com/lambda/latest/dg/API_Invoke.html
-export default function invocationsRoute(lambda, options) {
-  const invocationsController = new InvocationsController(lambda)
+export default function invocationsRoute(lambda, options, v3Utils) {
+  const invocationsController = new InvocationsController(lambda, v3Utils)
 
   return {
     async handler(request, h) {
@@ -45,7 +45,8 @@ export default function invocationsRoute(lambda, options) {
       let statusCode = 200
       let functionError = null
       if (invokeResults) {
-        resultPayload = invokeResults.Payload || ''
+        const isPayloadDefined = typeof invokeResults.Payload !== 'undefined'
+        resultPayload = isPayloadDefined ? invokeResults.Payload : ''
         statusCode = invokeResults.StatusCode || 200
         functionError = invokeResults.FunctionError || null
       }
@@ -62,13 +63,13 @@ export default function invocationsRoute(lambda, options) {
     },
     method: 'POST',
     options: {
+      cors: options.corsConfig,
       payload: {
         // allow: ['binary/octet-stream'],
         defaultContentType: 'binary/octet-stream',
         // request.payload will be a raw buffer
         parse: false,
       },
-      cors: options.corsConfig,
       tags: ['api'],
     },
     path: '/2015-03-31/functions/{functionName}/invocations',

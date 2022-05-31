@@ -1,0 +1,28 @@
+service: twoway-websocket-tests
+
+plugins:
+  - ../../../
+
+provider:
+  memorySize: 128
+  name: aws
+  region: us-east-1 # default
+  runtime: nodejs16.x
+  stage: dev
+  versionFunctions: false
+
+functions:
+  handler:
+    events:
+      - http:
+          method: get
+          path: echo
+      - websocket:
+          route: $connect
+      - websocket:
+          route: $disconnect
+      - websocket:
+          route: $default
+          # Enable 2-way comms
+          routeResponseSelectionExpression: $default
+    handler: src/handler.handler

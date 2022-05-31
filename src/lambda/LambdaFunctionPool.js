@@ -6,15 +6,16 @@ export default class LambdaFunctionPool {
   #serverless = null
   #timerRef = null
 
-  constructor(serverless, options) {
+  constructor(serverless, options, v3Utils) {
     this.#options = options
     this.#serverless = serverless
+    this.v3Utils = v3Utils
 
     // start cleaner
-    this._startCleanTimer()
+    this.#startCleanTimer()
   }
 
-  _startCleanTimer() {
+  #startCleanTimer() {
     // NOTE: don't use setInterval, as it would schedule always a new run,
     // regardless of function processing time and e.g. user action (debugging)
     this.#timerRef = setTimeout(() => {
@@ -37,11 +38,11 @@ export default class LambdaFunctionPool {
       })
 
       // schedule new timer
-      this._startCleanTimer()
+      this.#startCleanTimer()
     }, (this.#options.functionCleanupIdleTimeSeconds * 1000) / 2)
   }
 
-  _cleanupPool() {
+  #cleanupPool() {
     const wait = []
 
     this.#pool.forEach((lambdaFunctions) => {
@@ -59,7 +60,7 @@ export default class LambdaFunctionPool {
   async cleanup() {
     clearTimeout(this.#timerRef)
 
-    return this._cleanupPool()
+    return this.#cleanupPool()
   }
 
   get(functionKey, functionDefinition) {
@@ -73,6 +74,7 @@ export default class LambdaFunctionPool {
         functionDefinition,
         this.#serverless,
         this.#options,
+        this.v3Utils,
       )
       this.#pool.set(functionKey, new Set([lambdaFunction]))
 
@@ -93,6 +95,7 @@ export default class LambdaFunctionPool {
         functionDefinition,
         this.#serverless,
         this.#options,
+        this.v3Utils,
       )
       lambdaFunctions.add(lambdaFunction)
 

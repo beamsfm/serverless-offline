@@ -1,21 +1,21 @@
-import { EOL, platform } from 'os'
-import { delimiter, join, relative, resolve } from 'path'
-import { spawn } from 'child_process'
-import extend from 'extend'
-import readline from 'readline'
+import { spawn } from 'node:child_process'
+import { EOL, platform } from 'node:os'
+import { delimiter, join, relative, resolve } from 'node:path'
+import process, { cwd } from 'node:process'
+import readline from 'node:readline'
 
 const { parse, stringify } = JSON
-const { cwd } = process
+const { assign } = Object
 const { has } = Reflect
 
 export default class PythonRunner {
+  #allowCache = false
   #env = null
   #handlerName = null
   #handlerPath = null
   #runtime = null
-  #allowCache = false
 
-  constructor(funOptions, env, allowCache) {
+  constructor(funOptions, env, allowCache, v3Utils) {
     const { handlerName, handlerPath, runtime } = funOptions
 
     this.#env = env
@@ -23,6 +23,13 @@ export default class PythonRunner {
     this.#handlerPath = handlerPath
     this.#runtime = platform() === 'win32' ? 'python.exe' : runtime
     this.#allowCache = allowCache
+
+    if (v3Utils) {
+      this.log = v3Utils.log
+      this.progress = v3Utils.progress
+      this.writeText = v3Utils.writeText
+      this.v3Utils = v3Utils
+    }
 
     if (process.env.VIRTUAL_ENV) {
       const runtimeDir = platform() === 'win32' ? 'Scripts' : 'bin'
@@ -44,7 +51,7 @@ export default class PythonRunner {
         this.#handlerName,
       ],
       {
-        env: extend(process.env, this.#env),
+        env: assign(process.env, this.#env),
         shell: true,
       },
     )
@@ -59,7 +66,7 @@ export default class PythonRunner {
     this.handlerProcess.kill()
   }
 
-  _parsePayload(value) {
+  #parsePayload(value) {
     let payload
 
     for (const item of value.split(EOL)) {
@@ -69,7 +76,7 @@ export default class PythonRunner {
       try {
         json = parse(item)
         // nope, it's not JSON
-      } catch (err) {
+      } catch {
         // no-op
       }
 
@@ -81,6 +88,8 @@ export default class PythonRunner {
       ) {
         payload = json.__offline_payload__
         // everything else is print(), logging, ...
+      } else if (this.log) {
+        this.log.notice(item)
       } else {
         console.log(item)
       }
@@ -96,19 +105,24 @@ export default class PythonRunner {
   async run(event, context) {
     return new Promise((accept, reject) => {
       const input = stringify({
+        allowCache: this.#allowCache,
         context,
         event,
-        allowCache: this.#allowCache,
       })
 
       const onErr = (data) => {
         // TODO
-        console.log(data.toString())
+
+        if (this.log) {
+          this.log.notice(data.toString())
+        } else {
+          console.log(data.toString())
+        }
       }
 
       const onLine = (line) => {
         try {
-          const parsed = this._parsePayload(line.toString())
+          const parsed = this.#parsePayload(line.toString())
           if (parsed) {
             this.handlerProcess.stdout.readline.removeListener('line', onLine)
             this.handlerProcess.stderr.removeListener('data', onErr)

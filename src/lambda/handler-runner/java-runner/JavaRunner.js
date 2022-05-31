@@ -1,4 +1,5 @@
-import { EOL } from 'os'
+import { EOL } from 'node:os'
+import process from 'node:process'
 import fetch from 'node-fetch'
 import { invokeJavaLocal } from 'java-invoke-local'
 
@@ -6,32 +7,35 @@ const { parse, stringify } = JSON
 const { has } = Reflect
 
 export default class JavaRunner {
+  #allowCache = false
   #env = null
   #functionName = null
   #handler = null
   #deployPackage = null
-  #allowCache = false
 
-  constructor(funOptions, env, allowCache) {
-    const {
-      functionName,
-      handler,
-      servicePackage,
-      functionPackage,
-    } = funOptions
+  constructor(funOptions, env, allowCache, v3Utils) {
+    const { functionName, handler, servicePackage, functionPackage } =
+      funOptions
 
     this.#env = env
     this.#functionName = functionName
     this.#handler = handler
     this.#deployPackage = functionPackage || servicePackage
     this.#allowCache = allowCache
+
+    if (v3Utils) {
+      this.log = v3Utils.log
+      this.progress = v3Utils.progress
+      this.writeText = v3Utils.writeText
+      this.v3Utils = v3Utils
+    }
   }
 
   // no-op
   // () => void
   cleanup() {}
 
-  _parsePayload(value) {
+  #parsePayload(value) {
     for (const item of value.split(EOL)) {
       let json
 
@@ -39,7 +43,7 @@ export default class JavaRunner {
       try {
         json = parse(item)
         // nope, it's not JSON
-      } catch (err) {
+      } catch {
         // no-op
       }
 
@@ -68,17 +72,16 @@ export default class JavaRunner {
 
       const data = stringify({
         artifact: this.#deployPackage,
-        handler: this.#handler,
         data: input,
         function: this.#functionName,
+        handler: this.#handler,
         jsonOutput: true,
         serverlessOffline: true,
-        allowCache: this.#allowCache,
       })
 
       const httpOptions = {
-        method: 'POST',
         body: data,
+        method: 'POST',
       }
 
       const port = process.env.JAVA_OFFLINE_SERVER || 8080
@@ -87,10 +90,16 @@ export default class JavaRunner {
         httpOptions,
       )
       result = await response.text()
-    } catch (e) {
-      console.log(
-        'Local java server not running. For faster local invocations, run "java-invoke-local --server" in your project directory',
-      )
+    } catch {
+      if (this.log) {
+        this.log.notice(
+          'Local java server not running. For faster local invocations, run "java-invoke-local --server" in your project directory',
+        )
+      } else {
+        console.log(
+          'Local java server not running. For faster local invocations, run "java-invoke-local --server" in your project directory',
+        )
+      }
 
       // Fallback invocation
       const args = [
@@ -106,14 +115,14 @@ export default class JavaRunner {
         '--serverless-offline',
       ]
       result = invokeJavaLocal(args, this.#env)
-      console.log(result)
+
+      if (this.log) {
+        this.log.notice(result)
+      } else {
+        console.log(result)
+      }
     }
 
-    try {
-      return this._parsePayload(result)
-    } catch (err) {
-      console.log(result)
-      return err
-    }
+    return this.#parsePayload(result)
   }
 }
